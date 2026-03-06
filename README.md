@@ -1,4 +1,4 @@
-# GraphAI
+# RepoGraphAI
 
 Understand any codebase visually.
 
@@ -29,7 +29,7 @@ Frontend → API → Services → Database
 - Architecture visualization
 - Multi-language support
 - Simple CLI interface
-
+- Also implement watchdog to real time scan
 ---
 
 ## Installation
