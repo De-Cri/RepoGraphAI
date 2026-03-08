@@ -1,4 +1,4 @@
-![RepoGraph presentation image](Gemini_Generated_Image_4hm7nf4hm7nf4hm7.png)
+![RepoGraph presentation image](image.png)
 
 # RepoGraph
 
