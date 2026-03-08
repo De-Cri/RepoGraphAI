@@ -1,0 +1,22 @@
+repograph
+│
+├── indexer
+│   ├── repo_scanner.py
+│   ├── parser_engine.py
+│   └── symbol_extractor.py
+│
+├── graph
+│   ├── dependency_graph.py
+│   ├── architecture_graph.py
+│   └── flow_graph.py
+│
+├── intelligence
+│   ├── context_engine.py
+│   ├── impact_analysis.py
+│   └── architecture_detector.py
+│
+├── visualization
+│   └── graph_renderer.py
+│
+└── cli
+    └── main.py

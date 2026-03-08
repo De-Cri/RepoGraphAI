@@ -18,4 +18,6 @@ def parse_file(file_path):
                 "file": str(file_path),
                 "calls": calls
             }
+
+                
     return functions
