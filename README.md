@@ -111,6 +111,85 @@ Edges: [('login', 'authenticate'), ('authenticate', 'get_user')]
 
 ---
 
+## CLI Query Mode
+
+RepoGraph includes two focused commands to reduce output and speed up navigation.
+
+### `architecture`
+
+Returns only the symbols that match a query.
+
+```bash
+python cli/repograph_cli.py architecture path/to/repo login
+```
+
+Example output:
+
+```json
+{
+  "auth.py": {
+    "functions": ["login_user", "audit_login"]
+  },
+  "auth_service.py": {
+    "classes": {
+      "AuthService": {
+        "methods": ["authenticate"]
+      }
+    }
+  }
+}
+```
+
+### `connections`
+
+Returns only the calls around the matched symbols, with a depth value.
+
+```bash
+python cli/repograph_cli.py connections path/to/repo login 2
+```
+
+Example output:
+
+```json
+{
+  "matched_nodes": [
+    "auth.login_user"
+  ],
+  "connections": [
+    {
+      "from": "auth.login_user",
+      "to": "utils.normalize_username",
+      "type": "calls",
+      "depth": 1
+    },
+    {
+      "from": "auth.login_user",
+      "to": "models.AuthService.issue_token",
+      "type": "calls",
+      "depth": 1
+    }
+  ]
+}
+```
+
+Compact output to reduce tokens:
+
+```bash
+python cli/repograph_cli.py connections path/to/repo login 2 --compact
+```
+
+Example output:
+
+```json
+{
+  "n": ["auth.login_user"],
+  "e": [
+    ["auth.login_user", "utils.normalize_username", 1],
+    ["auth.login_user", "models.AuthService.issue_token", 1]
+  ]
+}
+```
+
 ## Architecture
 
 RepoGraph is built with three main components.

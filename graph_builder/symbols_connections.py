@@ -1,6 +1,6 @@
 import networkx as nx
 
-def generate_complete_connections(symbol_list: list, graph: nx.DiGraph, depth: int = 2):
+def generate_complete_connections(symbol_list: list, graph: nx.DiGraph, depth: int):
     connections_list = []
     visited = set()
 
@@ -16,7 +16,7 @@ def generate_complete_connections(symbol_list: list, graph: nx.DiGraph, depth: i
 
         frontier = {start}
 
-        for _ in range(depth):
+        for current_depth in range(depth):
 
             next_frontier = set()
 
@@ -31,7 +31,8 @@ def generate_complete_connections(symbol_list: list, graph: nx.DiGraph, depth: i
                     connections_list.append({
                         "from": node,
                         "to": target,
-                        "type": "calls"
+                        "type": "calls",
+                        "depth": current_depth + 1
                     })
                     next_frontier.add(target)
 
@@ -39,7 +40,8 @@ def generate_complete_connections(symbol_list: list, graph: nx.DiGraph, depth: i
                     connections_list.append({
                         "from": source,
                         "to": node,
-                        "type": "calls"
+                        "type": "calls",
+                        "depth": current_depth + 1
                     })
                     next_frontier.add(source)
 
