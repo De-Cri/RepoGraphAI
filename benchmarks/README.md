@@ -69,7 +69,9 @@ Agent flow options:
 
 - `single` (default): 1 round per agent (1 LLM call per agent)
 - `agent`: realistic loop  
-  `query → planning → search → open files → reasoning → search → open files → answer`
+  `query -> planning -> search -> open files -> reasoning -> search -> open files -> answer`
+  For `classic`, you can optionally enable a file-picker step where the model chooses files from the repo file list.
+  For `repograph`, the agent flow runs RepoGraph first, then the model selects from the RepoGraph file list before answering.
 
 Set your API key:
 
@@ -92,6 +94,8 @@ Notes:
 - The output now stores per-query results under `agents` (`classic` and `repograph`).
 - Use `--agent-flow agent` if you want the multi-step loop.
 - Use `--agents classic|repograph|both` to control how many calls are made.
+- Use `--classic-file-picker on|off` to let the model select files from the repo file list in `agent` flow (default `on`).
+- Use `--file-picker-max-files`, `--file-picker-page-size`, `--file-picker-per-page` to tune the classic file picker.
 - Use `--arch-filter connections|none` to filter architecture matches by connection modules.
 - Use `--rank-keep-pct 0.3` to keep only the top 30% of ranked nodes in connections.
 - Use `--debug-files` to include the selected file lists in the JSON output.

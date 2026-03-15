@@ -143,15 +143,160 @@ def _normalize_keywords(keywords, fallback_query, max_terms=8):
     return _fallback_keywords(fallback_query, max_terms=max_terms)
 
 
-def _plan_search(client, model, task, mode):
+def _chunk_list(items, size):
+    for i in range(0, len(items), size):
+        yield items[i : i + size]
+
+
+def _build_file_picker_prompt(task, candidates, max_files, page_num=None, total_pages=None):
+    header = [
+        "You are selecting files to open for the task.",
+        "Return ONLY valid JSON with this schema:",
+        '{ "indices": [1, 2, 3], "notes": "..." }',
+        f"- Pick at most {max_files} files.",
+        "- Use the indices exactly as listed below.",
+    ]
+    if page_num is not None and total_pages is not None:
+        header.append(f"Page {page_num}/{total_pages}.")
+    header.append(f"Task: {task}")
+    header.append("Candidates:")
+    lines = []
+    for idx, path in enumerate(candidates, start=1):
+        lines.append(f"{idx}) {path}")
+    return "\n".join(header + lines)
+
+
+def _resolve_file_picker_selection(data, candidates, max_files):
+    selected = []
+    if isinstance(data, dict):
+        indices = data.get("indices") or data.get("index") or []
+        if isinstance(indices, (int, float, str)):
+            indices = [indices]
+        if isinstance(indices, list):
+            for item in indices:
+                try:
+                    idx = int(item)
+                except (TypeError, ValueError):
+                    continue
+                if 1 <= idx <= len(candidates):
+                    selected.append(candidates[idx - 1])
+        files = data.get("files") or []
+        if isinstance(files, str):
+            files = [files]
+        if isinstance(files, list):
+            basename_map = {}
+            for path in candidates:
+                name = Path(path).name
+                if name in basename_map:
+                    basename_map[name] = None
+                else:
+                    basename_map[name] = path
+            for item in files:
+                if not item:
+                    continue
+                item = str(item).strip()
+                if item in candidates:
+                    selected.append(item)
+                    continue
+                name = Path(item).name
+                resolved = basename_map.get(name)
+                if resolved:
+                    selected.append(resolved)
+    deduped = []
+    for item in selected:
+        if item not in deduped:
+            deduped.append(item)
+    return deduped[:max_files]
+
+
+def _pick_files_from_candidates(
+    client,
+    model,
+    task,
+    candidates,
+    max_files,
+    page_num=None,
+    total_pages=None,
+):
+    prompt = _build_file_picker_prompt(task, candidates, max_files, page_num, total_pages)
+    resp = _run_model(client, model, prompt)
+    data = _extract_json(resp.get("text", "")) or {}
+    selected = _resolve_file_picker_selection(data, candidates, max_files)
+    return selected, {
+        "raw": resp.get("text", ""),
+        "usage": resp.get("usage", {}),
+        "candidates": len(candidates),
+        "selected": len(selected),
+        "selected_list": selected,
+    }
+
+
+def _select_files_with_paging(
+    client,
+    model,
+    task,
+    candidates,
+    max_files,
+    page_size,
+    per_page_keep,
+    sleep_seconds,
+):
+    pages = []
+    if not candidates:
+        return [], {"pages": pages}
+
+    if len(candidates) <= page_size:
+        selected, meta = _pick_files_from_candidates(
+            client, model, task, candidates, max_files, page_num=1, total_pages=1
+        )
+        pages.append(meta)
+        return selected, {"pages": pages}
+
+    shortlist = []
+    chunks = list(_chunk_list(candidates, page_size))
+    total_pages = len(chunks)
+    for idx, chunk in enumerate(chunks, start=1):
+        selected, meta = _pick_files_from_candidates(
+            client,
+            model,
+            task,
+            chunk,
+            per_page_keep,
+            page_num=idx,
+            total_pages=total_pages,
+        )
+        pages.append(meta)
+        for item in selected:
+            if item not in shortlist:
+                shortlist.append(item)
+        time.sleep(sleep_seconds)
+
+    if len(shortlist) > max_files:
+        selected, meta = _pick_files_from_candidates(
+            client,
+            model,
+            task,
+            shortlist,
+            max_files,
+            page_num=1,
+            total_pages=1,
+        )
+        pages.append(meta)
+        return selected, {"pages": pages}
+
+    return shortlist, {"pages": pages}
+
+
+def _plan_search_classic(client, model, task, mode):
     prompt = (
         "You are planning the first code search.\n"
         "Return ONLY valid JSON with this schema:\n"
         '{ "keywords": ["..."], "notes": "..." }\n'
         "Rules:\n"
-        "- Provide 3 to 8 short keywords.\n"
+        "- Provide 3 to 8 keywords.\n"
         "- Use concrete terms (feature names, class names, modules).\n"
         "- Avoid stopwords and long phrases.\n"
+        "- In the response you give, only include files name, class names ,or function names.\n"
         f"Search mode: {mode}.\n"
         f"Task: {task}\n"
     )
@@ -168,6 +313,50 @@ def _plan_search(client, model, task, mode):
         "raw": resp.get("text", ""),
         "usage": resp.get("usage", {}),
     }
+
+
+def _aggregate_picker_usage(pages):
+    totals = {}
+    for page in pages:
+        usage = page.get("usage", {})
+        if not isinstance(usage, dict):
+            continue
+        for key, value in usage.items():
+            if isinstance(value, (int, float)):
+                totals[key] = totals.get(key, 0) + value
+    return totals
+
+
+def _plan_repograph_file_picker(
+    client,
+    model,
+    task,
+    candidates,
+    max_files,
+    page_size,
+    per_page_keep,
+    sleep_seconds,
+):
+    selected_paths, picker_meta = _select_files_with_paging(
+        client=client,
+        model=model,
+        task=task,
+        candidates=candidates,
+        max_files=max_files,
+        page_size=page_size,
+        per_page_keep=per_page_keep,
+        sleep_seconds=sleep_seconds,
+    )
+    pages = picker_meta.get("pages", []) if isinstance(picker_meta, dict) else []
+    plan = {
+        "keywords": [],
+        "notes": "repograph-file-picker",
+        "raw": "",
+        "usage": _aggregate_picker_usage(pages),
+        "selected_files": selected_paths,
+        "selected_count": len(selected_paths),
+    }
+    return plan, selected_paths, picker_meta
 
 
 def _connection_modules(conn):
@@ -357,8 +546,23 @@ def _run_agent(
     arch_filter,
     rank_keep_pct,
     debug_files,
+    classic_file_picker,
+    file_picker_max_files,
+    file_picker_page_size,
+    file_picker_per_page,
 ):
     mode_label = "keyword" if agent_mode == "classic" else "repograph"
+    use_file_picker = (
+        agent_flow == "agent"
+        and agent_mode == "classic"
+        and classic_file_picker == "on"
+    )
+    use_repograph_file_picker = agent_flow == "agent" and agent_mode == "repograph"
+    multi_step = agent_flow == "agent"
+    if use_repograph_file_picker:
+        multi_step = False
+
+    plan = None
     if agent_flow == "single":
         plan = {
             "keywords": _fallback_keywords(query),
@@ -366,23 +570,83 @@ def _run_agent(
             "raw": "",
             "usage": {},
         }
-    else:
-        plan = _plan_search(client, model, query, mode_label)
+    elif not use_repograph_file_picker:
+        plan = _plan_search_classic(client, model, query, mode_label)
         time.sleep(sleep_seconds)
 
-    round1 = _search_round(
-        agent_mode=agent_mode,
-        repo_path=repo_path,
-        search_keywords=plan["keywords"],
-        query_fallback=query,
-        all_files=all_files,
-        depth=depth,
-        basename_index=basename_index,
-        arch_filter=arch_filter,
-        rank_keep_pct=rank_keep_pct,
-    )
-
-    round1_files = round1["files"]
+    file_picker_meta = None
+    round1 = None
+    if use_repograph_file_picker:
+        round1 = _search_round(
+            agent_mode=agent_mode,
+            repo_path=repo_path,
+            search_keywords=[],
+            query_fallback=query,
+            all_files=all_files,
+            depth=depth,
+            basename_index=basename_index,
+            arch_filter=arch_filter,
+            rank_keep_pct=rank_keep_pct,
+        )
+        candidate_paths = [p.as_posix() for p in round1["files"]]
+        plan, selected_paths, picker_meta = _plan_repograph_file_picker(
+            client=client,
+            model=model,
+            task=query,
+            candidates=candidate_paths,
+            max_files=file_picker_max_files,
+            page_size=file_picker_page_size,
+            per_page_keep=file_picker_per_page,
+            sleep_seconds=sleep_seconds,
+        )
+        file_picker_meta = {
+            "enabled": True,
+            "mode": "repograph",
+            "max_files": file_picker_max_files,
+            "page_size": file_picker_page_size,
+            "per_page": file_picker_per_page,
+            **picker_meta,
+        }
+        file_map = {p.as_posix(): p for p in round1["files"]}
+        round1_files = [file_map[p] for p in selected_paths if p in file_map]
+        if not round1_files:
+            round1_files = round1["files"]
+    elif use_file_picker:
+        file_paths = [p.as_posix() for p in all_files]
+        selected_paths, picker_meta = _select_files_with_paging(
+            client=client,
+            model=model,
+            task=query,
+            candidates=file_paths,
+            max_files=file_picker_max_files,
+            page_size=file_picker_page_size,
+            per_page_keep=file_picker_per_page,
+            sleep_seconds=sleep_seconds,
+        )
+        file_picker_meta = {
+            "enabled": True,
+            "max_files": file_picker_max_files,
+            "page_size": file_picker_page_size,
+            "per_page": file_picker_per_page,
+            **picker_meta,
+        }
+        file_map = {p.as_posix(): p for p in all_files}
+        round1_files = [file_map[p] for p in selected_paths if p in file_map]
+        if not round1_files:
+            round1_files = baseline_retrieval(query, all_files, k=file_picker_max_files)
+    else:
+        round1 = _search_round(
+            agent_mode=agent_mode,
+            repo_path=repo_path,
+            search_keywords=plan["keywords"],
+            query_fallback=query,
+            all_files=all_files,
+            depth=depth,
+            basename_index=basename_index,
+            arch_filter=arch_filter,
+            rank_keep_pct=rank_keep_pct,
+        )
+        round1_files = round1["files"]
 
     round1_context_files, round1_token_count = _trim_to_token_limit(
         client,
@@ -393,7 +657,7 @@ def _run_agent(
 
     round1_context = build_context(round1_context_files)
 
-    if agent_flow == "single":
+    if not multi_step or use_file_picker:
         reasoning = None
         round2 = None
         combined_files = round1_files
@@ -441,17 +705,20 @@ def _run_agent(
     round1_out = {
         "round": 1,
         "keywords": plan["keywords"],
-        "search_query": round1["search_query"],
         "files_selected": len(round1_files),
         "files_used": len(round1_context_files),
         "token_count_estimate": round1_token_count,
-        "repograph": round1["repograph"],
     }
+    if round1:
+        round1_out["search_query"] = round1["search_query"]
+        round1_out["repograph"] = round1["repograph"]
+    if use_file_picker or use_repograph_file_picker:
+        round1_out["file_picker"] = file_picker_meta or {}
 
     if debug_files:
         round1_out["files_selected_list"] = [p.as_posix() for p in round1_files]
         round1_out["files_used_list"] = [p.as_posix() for p in round1_context_files]
-        if agent_mode != "classic":
+        if round1 and agent_mode != "classic":
             round1_out["arch_files_list"] = [p.as_posix() for p in round1.get("arch_files", [])]
             round1_out["conn_files_list"] = [p.as_posix() for p in round1.get("conn_files", [])]
 
@@ -530,6 +797,34 @@ def main():
         choices=["classic", "repograph", "both"],
         default="both",
         help="Which agents to run per query.",
+    )
+
+    parser.add_argument(
+        "--classic-file-picker",
+        choices=["off", "on"],
+        default="on",
+        help="In agent flow, let the model select files from the repo file list for classic.",
+    )
+
+    parser.add_argument(
+        "--file-picker-max-files",
+        type=int,
+        default=8,
+        help="Max files the model can select in classic file picker.",
+    )
+
+    parser.add_argument(
+        "--file-picker-page-size",
+        type=int,
+        default=200,
+        help="How many files to show per page when selecting from large repos.",
+    )
+
+    parser.add_argument(
+        "--file-picker-per-page",
+        type=int,
+        default=3,
+        help="How many files the model can pick per page.",
     )
 
     parser.add_argument(
@@ -636,6 +931,10 @@ def main():
                             arch_filter=args.arch_filter,
                             rank_keep_pct=args.rank_keep_pct,
                             debug_files=args.debug_files,
+                            classic_file_picker=args.classic_file_picker,
+                            file_picker_max_files=args.file_picker_max_files,
+                            file_picker_page_size=args.file_picker_page_size,
+                            file_picker_per_page=args.file_picker_per_page,
                         )
                         for agent_mode in selected_agents
                     ],
