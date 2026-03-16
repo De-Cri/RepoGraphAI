@@ -2,31 +2,61 @@
 
 # RepoGraph
 
-**Understand any codebase in seconds.**
+**Understand any codebase in seconds. Save millions of tokens.**
 
-RepoGraph scans a repository and builds a **function-level dependency graph** so you can instantly see how functions, files, and modules interact.
+RepoGraph scans a repository and builds a **function-level dependency graph** so AI agents and developers can instantly find the exact files and functions that matter — without reading the whole codebase.
 
-Designed for developers working with **large codebases** and AI coding tools like Claude Code.
+Designed for **large codebases** and AI coding tools like Claude Code. Available as a **CLI tool** and **MCP server**.
 
 ---
 
-## Why RepoGraph?
+## The Problem
 
-Modern AI coding tools struggle with **large repositories** because they need to read thousands of lines of code to understand context.
+Modern AI coding tools burn through tokens reading thousands of lines of irrelevant code. Given a query like *"explain the run function"*, a classic keyword agent opens 6 files and sends **65,000+ tokens** to the model.
 
-RepoGraph solves this by creating a **structural map of the repository**, showing:
+Most of that context is noise.
 
-* which functions call each other
-* how modules interact
-* what parts of the code will be affected by a change
+---
 
-Instead of reading the whole codebase, an AI (or developer) can query the graph and instantly understand **the relevant parts of the system**.
+## The Result
+
+RepoGraph was benchmarked on [Brian2](https://github.com/brian-team/brian2), a large real-world neural simulator, against a classic keyword-based agent using Gemini 2.5 Flash.
+
+**Query**: *"explain function run in brian2 simulator"*
+
+![Benchmark chart: RepoGraph vs Classic agent](benchmarks/results/benchmark_chart.png)
+
+**RepoGraph used 3.3× fewer tokens** and opened 3× fewer files — while producing an equally accurate, detailed answer.
+
+### How to reproduce
+
+Classic agent:
+```bash
+python benchmarks/gemini_agent_benchmark.py --agents classic --agent-flow agent
+```
+
+RepoGraph agent:
+```bash
+python benchmarks/gemini_agent_benchmark.py --agents repograph --agent-flow agent --rank-keep-pct 0.4 --arch-filter connections
+```
+
+---
+
+## Why it works
+
+Instead of keyword-matching filenames, RepoGraph builds a **structural graph of the repository**:
+
+* which functions call which
+* how modules depend on each other
+* which symbols are most central to a query
+
+Given a query, RepoGraph ranks nodes by relevance and returns only the **key entry points** — the 2–3 files that actually contain the answer. The AI reads those, not everything.
+
+At scale, across hundreds of agent runs, this saves **millions of tokens**.
 
 ---
 
 ## Example
-
-Imagine this code:
 
 ```python
 def login(user):
@@ -39,91 +69,57 @@ def get_user(user):
     pass
 ```
 
-RepoGraph builds this call graph:
+RepoGraph builds:
 
 ```
 login → authenticate → get_user
 ```
 
-Now you immediately know:
-
-* changing `get_user()` impacts `authenticate()` and `login()`
-* `login()` is the entry point
+Query: *"what does login touch?"*
+RepoGraph returns: `auth.py` with `login`, `authenticate`, `get_user` — not every file in the repo.
 
 ---
 
 ## Features
 
-* Repository scanning
 * Function-level dependency graph
 * Call graph generation
-* CLI interface
-* Lightweight and fast
-
-Planned features:
-
-* cross-file dependency graphs
-* class & method analysis
-* impact analysis (`what breaks if I change this?`)
-* integration with AI coding agents
-* persistent context files for large codebases
+* Symbol ranking by query relevance
+* `architecture` command — find symbols matching a query
+* `connections` command — trace call paths around matched symbols
+* Compact output mode (`--compact`) for minimal token footprint
+* **MCP server** — plug directly into Claude Code and other AI agents
+* **All programming languages** — Python, TypeScript, JavaScript, Go, Java, and more
 
 ---
 
 ## Installation
 
-Clone the repository:
-
 ```bash
 git clone https://github.com/yourname/repograph
 cd repograph
-```
-
-Create a virtual environment:
-
-```bash
 python -m venv .venv
 source .venv/bin/activate
-```
-
-Install dependencies:
-
-```bash
 pip install typer networkx
 ```
 
 ---
 
-## Usage
+## CLI Usage
 
-Run RepoGraph on a repository:
+Index a repository:
 
 ```bash
 python cli.py index path/to/repository
 ```
 
-Example output:
-
-```
-Nodes: ['login', 'authenticate', 'get_user']
-Edges: [('login', 'authenticate'), ('authenticate', 'get_user')]
-```
-
----
-
-## CLI Query Mode
-
-RepoGraph includes two focused commands to reduce output and speed up navigation.
-
 ### `architecture`
 
-Returns only the symbols that match a query.
+Find all symbols matching a query:
 
 ```bash
 python cli/repograph_cli.py architecture path/to/repo login
 ```
-
-Example output:
 
 ```json
 {
@@ -142,43 +138,27 @@ Example output:
 
 ### `connections`
 
-Returns only the calls around the matched symbols, with a depth value.
+Trace call paths around matched symbols:
 
 ```bash
 python cli/repograph_cli.py connections path/to/repo login 2
 ```
 
-Example output:
-
 ```json
 {
-  "matched_nodes": [
-    "auth.login_user"
-  ],
+  "matched_nodes": ["auth.login_user"],
   "connections": [
-    {
-      "from": "auth.login_user",
-      "to": "utils.normalize_username",
-      "type": "calls",
-      "depth": 1
-    },
-    {
-      "from": "auth.login_user",
-      "to": "models.AuthService.issue_token",
-      "type": "calls",
-      "depth": 1
-    }
+    { "from": "auth.login_user", "to": "utils.normalize_username", "type": "calls", "depth": 1 },
+    { "from": "auth.login_user", "to": "models.AuthService.issue_token", "type": "calls", "depth": 1 }
   ]
 }
 ```
 
-Compact output to reduce tokens:
+Compact output (fewer tokens):
 
 ```bash
 python cli/repograph_cli.py connections path/to/repo login 2 --compact
 ```
-
-Example output:
 
 ```json
 {
@@ -190,40 +170,36 @@ Example output:
 }
 ```
 
+---
+
+## MCP Server
+
+RepoGraph exposes its graph as an **MCP tool**, so AI agents can query it natively.
+
+Add it to your Claude Code config and agents will automatically call `repograph.connections` or `repograph.architecture` instead of reading entire files.
+
+```json
+{
+  "mcpServers": {
+    "repograph": {
+      "command": "python",
+      "args": ["server/api.py", "--repo", "path/to/repo"]
+    }
+  }
+}
+```
+
+---
+
 ## Architecture
 
-RepoGraph is built with three main components.
-
-### Scanner
-
-Finds all source files in the repository.
-
 ```
-repo → files
-```
-
----
-
-### Parser
-
-Extracts:
-
-* functions
-* function calls
-* relationships
-
-```
-file → functions → calls
-```
-
----
-
-### Graph Builder
-
-Builds a dependency graph using NetworkX.
-
-```
-functions → graph
+repo
+ └── Scanner        → finds all source files
+      └── Parser    → extracts functions, calls, relationships
+           └── Graph Builder  → builds dependency graph (NetworkX)
+                └── Ranker    → scores nodes by query relevance
+                     └── CLI / MCP  → returns minimal context to the agent
 ```
 
 ---
@@ -233,56 +209,59 @@ functions → graph
 ```
 repograph/
 │
+├── scanner/
+│   └── scanner.py               # find all source files in the repo
+│
 ├── parser/
-│   ├── ast_parser.py        # estrazione di classi, metodi, funzioni
-│   └── symbol_index.py      # mapping simbolo → file/linea
+│   └── ast_parser.py            # extract classes, methods, functions
 │
-├── graph/
-│   ├── call_graph.py        # grafo delle chiamate
-│   ├── dependency_graph.py  # dipendenze tra moduli
-│   └── execution_paths.py   # path probabili
+├── indexer/
+│   └── symbol_extractor.py      # symbol → file/line mapping
 │
-├── retrieval/
-│   ├── semantic_search.py   # embeddings simboli
-│   └── graph_expansion.py   # espansione intelligente
+├── graph_builder/
+│   ├── call_graph.py            # build the call graph
+│   └── symbols_connections.py   # track connections between symbols
 │
-├── context/
-│   └── context_builder.py   # ranking e trimming per token
+├── intelligence/
+│   ├── architecture_detector.py  # match symbols to a query
+│   └── rank_graph_connections.py # rank nodes by relevance
 │
-├── server/
-│   └── api.py               # MCP / REST API
+├── output/
+│   └── output_writer.py         # format and write graph output
 │
-└── cli/
-    └── repograph_cli.py
+├── cli/
+│   └── repograph_cli.py         # CLI interface
+│
+└── benchmarks/
+    ├── gemini_agent_benchmark.py # benchmark vs classic keyword search
+    └── bench_utils.py            # shared benchmark utilities
+```
 
 ---
 
-## Future Vision
+## Vision
 
-RepoGraph could become the **structural memory layer for AI coding agents**.
+RepoGraph is the **structural memory layer for AI coding agents**.
 
-Instead of reading entire repositories, agents could:
+Instead of reading entire repositories, agents:
 
-* query the dependency graph
-* fetch only relevant code
-* reason about impact before editing code
+1. Query the dependency graph
+2. Get back only the relevant symbols and files
+3. Read 2–3 files instead of 20
+4. Reason about impact before editing
 
-This makes large repositories **much easier to navigate, modify, and maintain**.
+At the scale of real development — thousands of agent calls per day — this translates to **millions of tokens saved per project**, faster responses, and lower costs.
 
 ---
 
 ## Contributing
 
-Contributions are welcome.
+Contributions welcome. Open an issue or PR for:
 
-If you have ideas for:
-
-* better parsing
-* language support
+* additional language parsers
 * graph visualization
-* AI integrations
-
-open an issue or submit a pull request.
+* AI agent integrations
+* MCP improvements
 
 ---
 
