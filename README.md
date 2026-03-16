@@ -2,7 +2,7 @@
 
 # Scrooge
 
-**Save millions of tokens. Understand any codebase in seconds. **
+**Save millions of tokens. Understand any codebase in seconds.**
 
 Scrooge scans a repository and builds a **function-level dependency graph** so AI agents and developers can instantly find the exact files and functions that matter — without reading the whole codebase.
 
