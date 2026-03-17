@@ -4,7 +4,7 @@
 
 **Save millions of tokens. Understand any codebase in seconds.**
 
-Scrooge scans a repository and builds a **function-level dependency graph** so AI agents and developers can instantly find the exact files and functions that matter — without reading the whole codebase.
+Scrooge scans a repository and builds a **function-level dependency graph** so AI agents and developers can instantly find the exact files and functions that matter — without reading the whole codebase and useless files.
 
 Designed for AI coding tools like Claude Code. Available as a **CLI tool** and **MCP server**.
 
@@ -27,6 +27,9 @@ Scrooge was benchmarked on [Brian2](https://github.com/brian-team/brian2), a lar
 ![Benchmark chart: Scrooge vs Classic agent](benchmarks/results/benchmark_chart.png)
 
 **Scrooge used 3.3× fewer tokens** and opened 3× fewer files — while producing an equally accurate, more detailed answer.
+
+See the full agent responses comparison side by side: [brian_benchmark_output.md](brian_benchmark_output.md)
+
 
 ### How to reproduce
 
