@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "repograph": {
+      "command": "python",
+      "args": ["C:/Users/ssamu/OneDrive/Desktop/RepoGraphAI/mcp_server/repograph_mcp.py"]
+    }
+  }
+}
