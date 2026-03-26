@@ -1,4 +1,6 @@
 import json
+import math
+import re
 import sys
 from pathlib import Path
 
@@ -15,6 +17,17 @@ from indexer.symbol_extractor import symbol_extractor
 from output.output_writer import write_run_output
 
 app = typer.Typer()
+
+_NON_ARCH_PATTERNS = re.compile(
+    r"([\\/]tests?[\\/]"
+    r"|[\\/]benchmarks?[\\/]"
+    r"|[\\/]fixtures?[\\/]"
+    r"|[\\/]migrations?[\\/]"
+    r"|[\\/]examples?[\\/]"
+    r"|[/\\]conftest\.py$"
+    r"|(?:^|[\\/])test_[^/\\]*\.py$"
+    r"|_test\.py$)"
+)
 
 def _build_parsed_repo(path: str):
     files = scan_repo(path)
@@ -46,11 +59,132 @@ def index(path: str):
     typer.echo(f"Output scritto in: {output_path}")
 
 @app.command()
-def architecture(path: str, query: str = typer.Argument("")):
-    parsed_repo = _build_parsed_repo(path)
+def architecture(
+    path: str,
+    query: str = typer.Argument(""),
+    rank_keep_pct: float = typer.Option(
+        0.3,
+        "--rank-keep-pct",
+        help="Percentuale (0-1) dei nodi rankati da mantenere per connections.",
+    ),
+    file_keep_pct: float = typer.Option(
+        None,
+        "--file-keep-pct",
+        help="Percentuale (0-1) dei file rankati da mantenere dopo lo scoring.",
+    ),
+):
+    files = scan_repo(path)
+    parsed_repo = {"files": {}}
+    name_to_path = {}
+
+    for file in files:
+        if file.suffix == ".py":
+            name_to_path.setdefault(file.name, []).append(str(file))
+            if not _NON_ARCH_PATTERNS.search(str(file).replace("\\", "/")):
+                parsed_file = parse_file(file)
+                parsed_repo["files"].update(parsed_file.get("files", {}))
+
+    graph = build_graph(parsed_repo)
     parsed_payload = json.dumps({"parsed_repo": parsed_repo})
-    result = symbol_extractor(query, parsed_payload)
-    typer.echo(json.dumps(result, indent=2, ensure_ascii=False))
+    symbol_map = symbol_extractor(query, parsed_payload)
+
+    arch_files_raw = list(symbol_map.keys())
+    matched_nodes = sorted(set(_symbol_map_to_nodes(symbol_map)))
+    symbol_list = [{"name": node, "type": "function"} for node in matched_nodes]
+
+    # BFS runs on the full ranked graph (rank_keep_pct=1.0) so start_nodes are reachable
+    connections_list, ranked_nodes, node_scores = generate_complete_connections(
+        symbol_list,
+        graph,
+        depth=2,
+        rank_keep_pct=1.0,
+        return_scores=True,
+    )
+
+    if ranked_nodes and 0 < rank_keep_pct < 1:
+        keep_count = max(1, math.ceil(len(ranked_nodes) * rank_keep_pct))
+        top_ranked = ranked_nodes[:keep_count]
+    else:
+        top_ranked = ranked_nodes
+
+    conn_modules = {node.split(".")[0] + ".py" for node in top_ranked if "." in node}
+    important_files = [
+        path
+        for f in arch_files_raw
+        if f in conn_modules and f in name_to_path
+        for path in name_to_path[f]
+        if not _NON_ARCH_PATTERNS.search(path.replace("\\", "/"))
+    ]
+
+    # deduplicazione per (from, to) — self-loop rimossi
+    unique_connections = set()
+    ordered_connections = []
+    for item in connections_list:
+        frm, to = item.get("from"), item.get("to")
+        if frm == to:
+            continue
+        key = (frm, to)
+        if key in unique_connections:
+            continue
+        unique_connections.add(key)
+        ordered_connections.append(item)
+    ordered_connections.sort(key=lambda c: (c.get("depth", 0), c.get("from", ""), c.get("to", "")))
+
+    all_nodes = sorted({n for item in ordered_connections for n in (item.get("from"), item.get("to")) if n})
+
+    # Cross-filter: keep only files that have at least one node in the call_graph
+    graph_modules = {node.split(".")[0] + ".py" for node in all_nodes if "." in node}
+    important_files = [f for f in important_files if Path(f).name in graph_modules]
+
+    # Scope call_graph to only candidate file modules
+    candidate_stems = {Path(f).stem for f in important_files}
+    scoped_connections = [
+        item for item in ordered_connections
+        if item.get("from", "").split(".")[0] in candidate_stems
+        and item.get("to", "").split(".")[0] in candidate_stems
+    ]
+
+    # Compute per-file relevance score (max node score per file, normalized 0-100)
+    file_scores = {}
+    for f in important_files:
+        prefix = Path(f).stem + "."
+        max_score = max(
+            (node_scores.get(n, 0) for n in node_scores if n.startswith(prefix)),
+            default=0,
+        )
+        file_scores[f] = max_score
+
+    top_score = max(file_scores.values(), default=1) or 1
+
+    # Build per-file connection summary for agent file picking
+    file_summaries = []
+    for f in important_files:
+        prefix = Path(f).stem + "."
+        calls_out = set()
+        called_by = set()
+        for edge in scoped_connections:
+            frm, to = edge.get("from", ""), edge.get("to", "")
+            if frm.startswith(prefix):
+                calls_out.add(to)
+            if to.startswith(prefix):
+                called_by.add(frm)
+        file_summaries.append({
+            "file": f,
+            "relevance": round(file_scores[f] / top_score * 100),
+            "calls": sorted(calls_out),
+            "called_by": sorted(called_by),
+        })
+
+    file_summaries.sort(key=lambda x: x["relevance"], reverse=True)
+
+    if isinstance(file_keep_pct, (int, float)) and 0 < file_keep_pct < 1:
+        keep_count = max(1, math.ceil(len(file_summaries) * file_keep_pct))
+        file_summaries = file_summaries[:keep_count]
+
+    json_output = {
+        "candidates": file_summaries,
+    }
+    typer.echo(json.dumps(json_output, indent=2, ensure_ascii=False))
 
 
 @app.command()

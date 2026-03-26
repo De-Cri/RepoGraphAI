@@ -1,7 +1,7 @@
 import networkx as nx
 
 
-def rank_graph_nodes(graph, start_nodes, max_nodes=40):
+def rank_graph_nodes(graph, start_nodes, max_nodes=40, return_scores=False):
     internal_nodes = graph.graph.get("internal_nodes", set(graph.nodes()))
     working_graph = graph.subgraph(internal_nodes)
 
@@ -32,4 +32,9 @@ def rank_graph_nodes(graph, start_nodes, max_nodes=40):
 
     scores.sort(reverse=True)
 
-    return [node for _, node in scores[:max_nodes]]
+    ranked = scores[:max_nodes]
+
+    if return_scores:
+        return [(node, score) for score, node in ranked]
+
+    return [node for _, node in ranked]

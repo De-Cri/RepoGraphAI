@@ -59,6 +59,10 @@ async def list_tools():
                     "rank_keep_pct":{
                         "type":"number",
                         "description":"fraction (0-1) of top-ranked connection nodes to keep when filtering important files (default 0.3)"
+                    },
+                    "file_keep_pct":{
+                        "type":"number",
+                        "description":"fraction (0-1) of top-ranked files to keep after relevance scoring (default 0.35)"
                     }
                 },
                 "required":["path","query"]
@@ -152,12 +156,12 @@ async def call_tool(name: str, arguments: dict):
         # always reachable — mirrors the CLI connections flow that produced the benchmark results.
         # rank_keep_pct from the caller is applied AFTER to filter important_files only.
         rank_keep_pct = arguments.get("rank_keep_pct", 0.3)
-        connections_list, ranked_nodes = generate_complete_connections(
+        connections_list, ranked_nodes, node_scores = generate_complete_connections(
             symbol_list,
             graph,
             depth=2,
             rank_keep_pct=1.0,
-            return_ranked=True,
+            return_scores=True,
         )
 
         # important_files: arch files whose module appears in the top rank_keep_pct of ranked nodes
@@ -206,6 +210,18 @@ async def call_tool(name: str, arguments: dict):
         ]
         scoped_nodes = sorted({n for item in scoped_connections for n in (item.get("from"), item.get("to")) if n})
 
+        # Compute per-file relevance score (max node score per file, normalized 0-100)
+        file_scores = {}
+        for f in important_files:
+            prefix = Path(f).stem + "."
+            max_score = max(
+                (node_scores.get(n, 0) for n in node_scores if n.startswith(prefix)),
+                default=0,
+            )
+            file_scores[f] = max_score
+
+        top_score = max(file_scores.values(), default=1) or 1
+
         # Build per-file connection summary for agent file picking
         file_summaries = []
         for f in important_files:
@@ -214,22 +230,25 @@ async def call_tool(name: str, arguments: dict):
             called_by = set()
             for edge in scoped_connections:
                 frm, to = edge.get("from", ""), edge.get("to", "")
-                if frm.startswith(prefix) and not to.startswith(prefix):
+                if frm.startswith(prefix):
                     calls_out.add(to)
-                if to.startswith(prefix) and not frm.startswith(prefix):
+                if to.startswith(prefix):
                     called_by.add(frm)
             file_summaries.append({
                 "file": f,
+                "relevance": round(file_scores[f] / top_score * 100),
                 "calls": sorted(calls_out),
                 "called_by": sorted(called_by),
             })
 
+        file_summaries.sort(key=lambda x: x["relevance"], reverse=True)
+        file_keep_pct = arguments.get("file_keep_pct", 0.35)
+        if isinstance(file_keep_pct, (int, float)) and 0 < file_keep_pct < 1:
+            keep_count = max(1, math.ceil(len(file_summaries) * file_keep_pct))
+            file_summaries = file_summaries[:keep_count]
+
         json_output = {
             "candidates": file_summaries,
-            "call_graph": {
-                "nodes": scoped_nodes,
-                "edges": [{"from": item.get("from"), "to": item.get("to"), "depth": item.get("depth", 0)} for item in scoped_connections],
-            },
         }
         # Write output to a file so the agent can consult it as dynamic memory
         repo_path = Path(arguments.get("path"))

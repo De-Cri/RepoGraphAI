@@ -10,6 +10,7 @@ def generate_complete_connections(
     max_nodes: int = None,
     rank_keep_pct: float = 1.0,
     return_ranked: bool = False,
+    return_scores: bool = False,
 ):
     connections_list = []
     visited = set()
@@ -21,6 +22,7 @@ def generate_complete_connections(
 
     ranked_graph = graph
     ranked_nodes = []
+    node_scores = {}
 
     if max_nodes is None:
         graph_size = len(graph.nodes())
@@ -29,11 +31,14 @@ def generate_complete_connections(
     if start_nodes:
         existing_starts = [node for node in start_nodes if node in graph]
         if existing_starts:
-            ranked_nodes = rank_graph_nodes(
+            ranked_with_scores = rank_graph_nodes(
                 graph,
                 existing_starts,
                 max_nodes=max_nodes,
+                return_scores=True,
             )
+            ranked_nodes = [node for node, _ in ranked_with_scores]
+            node_scores = {node: score for node, score in ranked_with_scores}
             if ranked_nodes:
                 if 0 < rank_keep_pct < 1:
                     keep_count = max(1, int(math.ceil(len(ranked_nodes) * rank_keep_pct)))
@@ -78,6 +83,9 @@ def generate_complete_connections(
                     next_frontier.add(source)
 
             frontier = next_frontier
+
+    if return_scores:
+        return connections_list, ranked_nodes, node_scores
 
     if return_ranked:
         return connections_list, ranked_nodes

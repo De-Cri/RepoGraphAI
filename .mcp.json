@@ -1,11 +1,11 @@
 {
   "mcpServers": {
     "Scrooge": {
-      "command": "C:/Users/ssamu/OneDrive/Desktop/RepoGraphAI/.venv/Scripts/python.exe",
-      "args": ["C:/Users/ssamu/OneDrive/Desktop/RepoGraphAI/mcp_server/repograph_mcp.py"],
-      "cwd": "C:/Users/ssamu/OneDrive/Desktop/RepoGraphAI",
+      "command": "C:/Users/ssamu/OneDrive/Desktop/Scrooge/.venv/Scripts/python.exe",
+      "args": ["C:/Users/ssamu/OneDrive/Desktop/Scrooge/mcp_server/repograph_mcp.py"],
+      "cwd": "C:/Users/ssamu/OneDrive/Desktop/Scrooge",
       "env": {
-        "PYTHONPATH": "C:/Users/ssamu/OneDrive/Desktop/RepoGraphAI"
+        "PYTHONPATH": "C:/Users/ssamu/OneDrive/Desktop/Scrooge"
       }
     }
   }
