@@ -327,7 +327,7 @@ def _aggregate_picker_usage(pages):
     return totals
 
 
-def _plan_repograph_file_picker(
+def _plan_scrooge_file_picker(
     client,
     model,
     task,
@@ -350,7 +350,7 @@ def _plan_repograph_file_picker(
     pages = picker_meta.get("pages", []) if isinstance(picker_meta, dict) else []
     plan = {
         "keywords": [],
-        "notes": "repograph-file-picker",
+        "notes": "scrooge-file-picker",
         "raw": "",
         "usage": _aggregate_picker_usage(pages),
         "selected_files": selected_paths,
@@ -469,7 +469,7 @@ def _search_round(
             "files": candidates,
             "arch_files": [],
             "conn_files": [],
-            "repograph": None,
+            "scrooge": None,
         }
 
     arch = run_cli_json(
@@ -520,7 +520,7 @@ def _search_round(
         "files": selected_files,
         "arch_files": arch_files,
         "conn_files": conn_files,
-        "repograph": {
+        "scrooge": {
             "arch_matches": len(arch.keys()),
             "arch_files_selected": len(arch_files),
             "ranked_nodes": len(conn.get("rn", [])) if "rn" in conn else len(conn.get("ranked_nodes", [])),
@@ -551,15 +551,15 @@ def _run_agent(
     file_picker_page_size,
     file_picker_per_page,
 ):
-    mode_label = "keyword" if agent_mode == "classic" else "repograph"
+    mode_label = "keyword" if agent_mode == "classic" else "scrooge"
     use_file_picker = (
         agent_flow == "agent"
         and agent_mode == "classic"
         and classic_file_picker == "on"
     )
-    use_repograph_file_picker = agent_flow == "agent" and agent_mode == "repograph"
+    use_scrooge_file_picker = agent_flow == "agent" and agent_mode == "scrooge"
     multi_step = agent_flow == "agent"
-    if use_repograph_file_picker:
+    if use_scrooge_file_picker:
         multi_step = False
 
     plan = None
@@ -570,13 +570,13 @@ def _run_agent(
             "raw": "",
             "usage": {},
         }
-    elif not use_repograph_file_picker:
+    elif not use_scrooge_file_picker:
         plan = _plan_search_classic(client, model, query, mode_label)
         time.sleep(sleep_seconds)
 
     file_picker_meta = None
     round1 = None
-    if use_repograph_file_picker:
+    if use_scrooge_file_picker:
         round1 = _search_round(
             agent_mode=agent_mode,
             repo_path=repo_path,
@@ -589,7 +589,7 @@ def _run_agent(
             rank_keep_pct=rank_keep_pct,
         )
         candidate_paths = [p.as_posix() for p in round1["files"]]
-        plan, selected_paths, picker_meta = _plan_repograph_file_picker(
+        plan, selected_paths, picker_meta = _plan_scrooge_file_picker(
             client=client,
             model=model,
             task=query,
@@ -601,7 +601,7 @@ def _run_agent(
         )
         file_picker_meta = {
             "enabled": True,
-            "mode": "repograph",
+            "mode": "scrooge",
             "max_files": file_picker_max_files,
             "page_size": file_picker_page_size,
             "per_page": file_picker_per_page,
@@ -711,8 +711,8 @@ def _run_agent(
     }
     if round1:
         round1_out["search_query"] = round1["search_query"]
-        round1_out["repograph"] = round1["repograph"]
-    if use_file_picker or use_repograph_file_picker:
+        round1_out["scrooge"] = round1["scrooge"]
+    if use_file_picker or use_scrooge_file_picker:
         round1_out["file_picker"] = file_picker_meta or {}
 
     if debug_files:
@@ -731,7 +731,7 @@ def _run_agent(
             "search_query": round2["search_query"],
             "files_selected": len(round2["files"]),
             "files_new": len(round2_files),
-            "repograph": round2["repograph"],
+            "scrooge": round2["scrooge"],
         }
         if debug_files:
             round2_out["files_selected_list"] = [p.as_posix() for p in round2["files"]]
@@ -794,7 +794,7 @@ def main():
 
     parser.add_argument(
         "--agents",
-        choices=["classic", "repograph", "both"],
+        choices=["classic", "scrooge", "both"],
         default="both",
         help="Which agents to run per query.",
     )
@@ -838,7 +838,7 @@ def main():
         "--rank-keep-pct",
         type=float,
         default=0.3,
-        help="Percentuale (0-1) dei nodi rankati da mantenere per connections.",
+        help="Fraction (0-1) of top-ranked nodes to keep for connections.",
     )
 
     parser.add_argument(
@@ -908,8 +908,8 @@ def main():
             selected_agents = []
             if args.agents in ("classic", "both"):
                 selected_agents.append("classic")
-            if args.agents in ("repograph", "both"):
-                selected_agents.append("repograph")
+            if args.agents in ("scrooge", "both"):
+                selected_agents.append("scrooge")
 
             repo_out["queries"].append(
                 {

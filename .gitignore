@@ -4,3 +4,6 @@ __pycache__/
 *.egg-info/
 benchmarks/tmp
 .claude
+.mcp.json
+output/
+.scrooge_architecture.json

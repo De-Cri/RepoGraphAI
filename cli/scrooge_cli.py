@@ -56,7 +56,7 @@ def index(path: str):
     parsed_repo = _build_parsed_repo(path)
     graph = build_graph(parsed_repo)
     output_path = write_run_output(parsed_repo, graph)
-    typer.echo(f"Output scritto in: {output_path}")
+    typer.echo(f"Output saved to: {output_path}")
 
 @app.command()
 def architecture(
@@ -65,12 +65,12 @@ def architecture(
     rank_keep_pct: float = typer.Option(
         0.3,
         "--rank-keep-pct",
-        help="Percentuale (0-1) dei nodi rankati da mantenere per connections.",
+        help="Fraction (0-1) of top-ranked nodes to keep for connections.",
     ),
     file_keep_pct: float = typer.Option(
         0.35,
         "--file-keep-pct",
-        help="Percentuale (0-1) dei file rankati da mantenere dopo lo scoring.",
+        help="Fraction (0-1) of top-ranked files to keep after scoring.",
     ),
 ):
     files = scan_repo(path)
@@ -116,7 +116,7 @@ def architecture(
         if not _NON_ARCH_PATTERNS.search(path.replace("\\", "/"))
     ]
 
-    # deduplicazione per (from, to) — self-loop rimossi
+    # deduplicate by (from, to) — remove self-loops
     unique_connections = set()
     ordered_connections = []
     for item in connections_list:
@@ -197,11 +197,11 @@ def connections(
     path: str,
     query: str = typer.Argument(""),
     depth: int = typer.Argument(2),
-    compact: bool = typer.Option(False, "--compact", help="Output compatto per ridurre i token."),
+    compact: bool = typer.Option(False, "--compact", help="Compact output to reduce token usage."),
     rank_keep_pct: float = typer.Option(
         1.0,
         "--rank-keep-pct",
-        help="Percentuale (0-1) dei nodi rankati da mantenere.",
+        help="Fraction (0-1) of top-ranked nodes to keep.",
     ),
 ):
     parsed_repo = _build_parsed_repo(path)

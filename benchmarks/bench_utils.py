@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def run_cli_json(repo_root: Path, args):
-    cmd = [sys.executable, str(repo_root / "cli" / "repograph_cli.py"), *args]
+    cmd = [sys.executable, str(repo_root / "cli" / "scrooge_cli.py"), *args]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.strip() or "CLI error")

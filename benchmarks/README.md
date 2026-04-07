@@ -36,7 +36,7 @@ SVG charts are saved to:
 - `benchmarks/results/agent_read_time_reduction_<repo>.svg`
 - `benchmarks/results/agent_cli_time_<repo>.svg`
 - `benchmarks/results/gemini_baseline_tokens_<repo>.svg`
-- `benchmarks/results/gemini_repograph_tokens_<repo>.svg`
+- `benchmarks/results/gemini_scrooge_tokens_<repo>.svg`
 
 ## What The Benchmarks Mean
 
@@ -63,7 +63,7 @@ falls back to `example_repo`.
 This runs a real LLM (Gemini) per query with two agent modes:
 
 - `classic`: keyword search over files
-- `repograph`: keywords -> `architecture` + `connections`
+- `scrooge`: keywords -> `architecture` + `connections`
 
 Agent flow options:
 
@@ -71,7 +71,7 @@ Agent flow options:
 - `agent`: realistic loop  
   `query -> planning -> search -> open files -> reasoning -> search -> open files -> answer`
   For `classic`, you can optionally enable a file-picker step where the model chooses files from the repo file list.
-  For `repograph`, the agent flow runs Scrooge first, then the model selects from the Scrooge file list before answering.
+  For `scrooge`, the agent flow runs Scrooge first, then the model selects from the Scrooge file list before answering.
 
 Set your API key:
 
@@ -82,7 +82,7 @@ $env:GEMINI_API_KEY="YOUR_KEY"
 Run:
 
 ```bash
-.\.venv\Scripts\python.exe benchmarks/gemini_agent_benchmark.py --model gemini-2.5-flash --max-input-tokens 200000 --agent-flow single --agents repograph
+.\.venv\Scripts\python.exe benchmarks/gemini_agent_benchmark.py --model gemini-2.5-flash --max-input-tokens 200000 --agent-flow single --agents scrooge
 ```
 
 Results are saved to:
@@ -91,9 +91,9 @@ Results are saved to:
 
 Notes:
 - `--sleep-seconds` defaults to `0`. Increase if you hit rate limits.
-- The output now stores per-query results under `agents` (`classic` and `repograph`).
+- The output now stores per-query results under `agents` (`classic` and `scrooge`).
 - Use `--agent-flow agent` if you want the multi-step loop.
-- Use `--agents classic|repograph|both` to control how many calls are made.
+- Use `--agents classic|scrooge|both` to control how many calls are made.
 - Use `--classic-file-picker on|off` to let the model select files from the repo file list in `agent` flow (default `on`).
 - Use `--file-picker-max-files`, `--file-picker-page-size`, `--file-picker-per-page` to tune the classic file picker.
 - Use `--arch-filter connections|none` to filter architecture matches by connection modules.

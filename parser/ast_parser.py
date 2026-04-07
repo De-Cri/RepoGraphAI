@@ -124,10 +124,12 @@ def _extract_calls(
 
 
 def parse_file(file_path):
-    with open(file_path, "r", encoding="utf-8") as f:
-        source = f.read()
-
-    tree = ast.parse(source)
+    try:
+        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+            source = f.read()
+        tree = ast.parse(source)
+    except (SyntaxError, UnicodeDecodeError):
+        return {"files": {Path(file_path).name: {"classes": {}, "functions": {}}}}
     path_obj = Path(file_path)
     module_name = path_obj.stem
     file_name = path_obj.name

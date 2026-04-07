@@ -97,7 +97,7 @@ async def list_tools():
     ]
 
 
-# TODO: _symbol_map_to_nodes is duplicated in cli/repograph_cli.py — move to a shared utils module when the project grows
+# TODO: _symbol_map_to_nodes is duplicated in cli/scrooge_cli.py — move to a shared utils module when the project grows
 def _symbol_map_to_nodes(symbol_map: dict):
     nodes = []
     for file_name, file_data in symbol_map.items():
@@ -181,7 +181,7 @@ async def call_tool(name: str, arguments: dict):
             if not _NON_ARCH_PATTERNS.search(path.replace("\\", "/"))
         ]
 
-        # deduplicazione per (from, to) — self-loop rimossi
+        # deduplicate by (from, to) — remove self-loops
         unique_connections = set()
         ordered_connections = []
         for item in connections_list:
@@ -285,7 +285,7 @@ async def call_tool(name: str, arguments: dict):
         ordered_connections = []
         for item in connections_list:
             frm, to = item.get("from"), item.get("to")
-            if frm == to:  # Fix A: rimuovi self-loop
+            if frm == to:  # skip self-loops
                 continue
             key = (frm, to)
             if key in unique_connections:
@@ -312,5 +312,11 @@ async def call_tool(name: str, arguments: dict):
 async def main():
     async with stdio_server() as (read,write):
         await app.run(read, write, app.create_initialization_options())
-        
-asyncio.run(main())
+
+
+def main_sync():
+    asyncio.run(main())
+
+
+if __name__ == "__main__":
+    main_sync()

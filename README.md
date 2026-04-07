@@ -40,7 +40,7 @@ python benchmarks/gemini_agent_benchmark.py --agents classic --agent-flow agent
 
 Scrooge agent:
 ```bash
-python benchmarks/gemini_agent_benchmark.py --agents repograph --agent-flow agent --rank-keep-pct 0.4 --arch-filter connections
+python benchmarks/gemini_agent_benchmark.py --agents scrooge --agent-flow agent --rank-keep-pct 0.4 --arch-filter connections
 ```
 
 ---
@@ -108,7 +108,7 @@ Scrooge returns: `auth.py` with `login`, `authenticate`, `get_user` — not ever
 * `connections` command — trace call paths around matched symbols
 * Compact output mode (`--compact`) for minimal token footprint
 * **MCP server** — plug directly into Claude Code and other AI agents
-* **All programming languages** — Python, TypeScript, JavaScript, Go, Java, and more
+* **Python** — full AST parsing; JS/TS file scanning (parsers coming soon)
 
 ---
 
@@ -118,64 +118,40 @@ Scrooge returns: `auth.py` with `login`, `authenticate`, `get_user` — not ever
 
 - **Python 3.11+** — check with `python --version`
 - **Git** — to clone the repository
+- **uv** (recommended) — install from [docs.astral.sh/uv](https://docs.astral.sh/uv/)
 
-### Step 1 — Clone the repository
+### Clone and install
 
 ```bash
-git clone https://github.com/SamueleCor662/Scrooge.git
+git clone https://github.com/De-Cri/Scrooge.git
 cd Scrooge
 ```
 
-### Step 2 — Create a virtual environment
-
-It's recommended to use a virtual environment to avoid conflicts with other Python packages.
-
-**macOS / Linux:**
+**With uv (recommended):**
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+uv pip install -e .
 ```
 
-**Windows (PowerShell):**
-```powershell
+**With pip + venv:**
+```bash
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
 ```
-
-**Windows (cmd):**
-```cmd
-python -m venv .venv
-.venv\Scripts\activate.bat
-```
-
-### Step 3 — Install Scrooge
+Then activate the virtual environment:
+- macOS / Linux: `source .venv/bin/activate`
+- Windows (PowerShell): `.\.venv\Scripts\Activate.ps1`
+- Windows (cmd): `.venv\Scripts\activate.bat`
 
 ```bash
 pip install -e .
 ```
 
-This installs Scrooge and all its core dependencies (`mcp`, `networkx`).
-
-To also install the CLI tool:
-```bash
-pip install -e ".[cli]"
-```
-
-That's it! Scrooge is now installed and ready to use.
+That's it! Both the **CLI** (`scrooge`) and the **MCP server** (`scrooge-mcp`) are installed.
 
 ---
 
 ## Setup as MCP Server (Claude Code)
 
 Scrooge exposes its graph as an **MCP tool**, so AI agents like Claude Code can query it natively — calling `architecture`, `connections`, and `index` instead of reading entire files.
-
-### Step 1 — Locate the Scrooge directory
-
-You need the **full absolute path** to the folder where you cloned Scrooge. For example:
-- macOS/Linux: `/home/yourname/Scrooge`
-- Windows: `C:/Users/yourname/Desktop/Scrooge`
-
-### Step 2 — Add Scrooge to Claude Code settings
 
 Open (or create) your Claude Code settings file:
 
@@ -184,23 +160,23 @@ Open (or create) your Claude Code settings file:
 | macOS / Linux | `~/.claude/settings.json` |
 | Windows | `%USERPROFILE%\.claude\settings.json` |
 
-Add the `Scrooge` MCP server inside the `mcpServers` block:
+Add the `Scrooge` MCP server inside the `mcpServers` block.
 
+**With uv (recommended):**
 ```json
 {
   "mcpServers": {
     "Scrooge": {
-      "command": "SCROOGE_PATH/.venv/Scripts/python.exe",
-      "args": ["-m", "mcp_server.repograph_mcp"],
-      "cwd": "SCROOGE_PATH"
+      "command": "uv",
+      "args": ["run", "--directory", "SCROOGE_PATH", "scrooge-mcp"]
     }
   }
 }
 ```
 
-Replace `SCROOGE_PATH` with the absolute path to your Scrooge folder.
+Replace `SCROOGE_PATH` with the absolute path to your Scrooge folder (e.g., `/home/yourname/Scrooge` or `C:/Users/yourname/Desktop/Scrooge`).
 
-**Examples:**
+**Without uv (using venv python directly):**
 
 macOS / Linux:
 ```json
@@ -208,7 +184,7 @@ macOS / Linux:
   "mcpServers": {
     "Scrooge": {
       "command": "/home/yourname/Scrooge/.venv/bin/python",
-      "args": ["-m", "mcp_server.repograph_mcp"],
+      "args": ["-m", "mcp_server.scrooge_mcp"],
       "cwd": "/home/yourname/Scrooge"
     }
   }
@@ -221,16 +197,14 @@ Windows:
   "mcpServers": {
     "Scrooge": {
       "command": "C:/Users/yourname/Desktop/Scrooge/.venv/Scripts/python.exe",
-      "args": ["-m", "mcp_server.repograph_mcp"],
+      "args": ["-m", "mcp_server.scrooge_mcp"],
       "cwd": "C:/Users/yourname/Desktop/Scrooge"
     }
   }
 }
 ```
 
-### Step 3 — Restart Claude Code
-
-After saving `settings.json`, **restart Claude Code** completely. The Scrooge tools (`architecture`, `connections`, `index`) will now appear automatically and Claude will use them when exploring codebases.
+After saving, **restart Claude Code**. The Scrooge tools (`architecture`, `connections`, `index`) will appear automatically and Claude will use them when exploring codebases.
 
 ### Verify it works
 
@@ -246,24 +220,22 @@ If Scrooge is configured correctly, Claude will call the MCP tool instead of rea
 
 ### `architecture`
 
-Find all symbols matching a query:
+Find candidate files matching a query, ranked by relevance with their call connections:
 
 ```bash
-python cli/repograph_cli.py architecture path/to/repo login
+scrooge architecture path/to/repo login
 ```
 
 ```json
 {
-  "auth.py": {
-    "functions": ["login_user", "audit_login"]
-  },
-  "auth_service.py": {
-    "classes": {
-      "AuthService": {
-        "methods": ["authenticate"]
-      }
+  "candidates": [
+    {
+      "file": "auth.py",
+      "relevance": 100,
+      "calls": ["auth.audit_login", "auth.store_audit_entry"],
+      "called_by": ["auth.audit_login", "auth.login_user"]
     }
-  }
+  ]
 }
 ```
 
@@ -272,15 +244,17 @@ python cli/repograph_cli.py architecture path/to/repo login
 Trace call paths around matched symbols:
 
 ```bash
-python cli/repograph_cli.py connections path/to/repo login 2
+scrooge connections path/to/repo login 2
 ```
 
 ```json
 {
-  "matched_nodes": ["auth.login_user"],
+  "matched_nodes": ["auth.audit_login", "auth.login_user"],
+  "ranked_nodes": ["auth.login_user", "auth.audit_login", "utils.normalize_username"],
   "connections": [
-    { "from": "auth.login_user", "to": "utils.normalize_username", "type": "calls", "depth": 1 },
-    { "from": "auth.login_user", "to": "models.AuthService.issue_token", "type": "calls", "depth": 1 }
+    { "from": "auth.audit_login", "to": "auth.store_audit_entry", "type": "calls", "depth": 1 },
+    { "from": "auth.login_user", "to": "auth.audit_login", "type": "calls", "depth": 1 },
+    { "from": "auth.login_user", "to": "utils.normalize_username", "type": "calls", "depth": 2 }
   ]
 }
 ```
@@ -288,17 +262,20 @@ python cli/repograph_cli.py connections path/to/repo login 2
 Compact output (fewer tokens):
 
 ```bash
-python cli/repograph_cli.py connections path/to/repo login 2 --compact
+scrooge connections path/to/repo login 2 --compact
 ```
 
 ```json
 {
-  "n": ["auth.login_user"],
+  "n": ["auth.audit_login", "auth.login_user"],
+  "rn": ["auth.login_user", "auth.audit_login", "utils.normalize_username"],
   "e": [
-    ["auth.login_user", "utils.normalize_username", 1],
-    ["auth.login_user", "models.AuthService.issue_token", 1]
+    ["auth.audit_login", "auth.store_audit_entry", 1],
+    ["auth.login_user", "auth.audit_login", 1],
+    ["auth.login_user", "utils.normalize_username", 2]
   ]
 }
+```
 
 ---
 
@@ -334,14 +311,16 @@ Scrooge/
 │   └── symbols_connections.py   # track connections between symbols
 │
 ├── intelligence/
-│   ├── architecture_detector.py  # match symbols to a query
-│   └── rank_graph_connections.py # rank nodes by relevance
+│   └── rank_graph_connections.py # rank nodes by relevance (PageRank + distance)
 │
 ├── output/
 │   └── output_writer.py         # format and write graph output
 │
 ├── cli/
-│   └── repograph_cli.py         # CLI interface
+│   └── scrooge_cli.py           # CLI interface
+│
+├── mcp_server/
+│   └── scrooge_mcp.py           # MCP server for AI agents
 │
 └── benchmarks/
     ├── gemini_agent_benchmark.py # benchmark vs classic keyword search

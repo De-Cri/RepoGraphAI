@@ -2,7 +2,7 @@
   "results": [
     {
       "name": "brian",
-      "path": "C:\\Users\\ssamu\\OneDrive\\Desktop\\github-biran2\\brian2",
+      "path": "brian2",
       "model": "gemini-2.5-flash",
       "max_input_tokens": 100000,
       "queries": [
@@ -63,9 +63,9 @@
                         "candidates": 200,
                         "selected": 3,
                         "selected_list": [
-                          "C:/Users/ssamu/OneDrive/Desktop/github-biran2/brian2/brian2/core/network.py",
-                          "C:/Users/ssamu/OneDrive/Desktop/github-biran2/brian2/brian2/core/functions.py",
-                          "C:/Users/ssamu/OneDrive/Desktop/github-biran2/brian2/brian2/__init__.py"
+                          "brian2/core/network.py",
+                          "brian2/core/functions.py",
+                          "brian2/__init__.py"
                         ]
                       },
                       {
@@ -78,9 +78,9 @@
                         "candidates": 111,
                         "selected": 3,
                         "selected_list": [
-                          "C:/Users/ssamu/OneDrive/Desktop/github-biran2/brian2/brian2/tests/test_network.py",
-                          "C:/Users/ssamu/OneDrive/Desktop/github-biran2/brian2/brian2/devices/cpp_standalone/device.py",
-                          "C:/Users/ssamu/OneDrive/Desktop/github-biran2/brian2/brian2/codegen/runtime/numpy_rt/numpy_rt.py"
+                          "brian2/tests/test_network.py",
+                          "brian2/devices/cpp_standalone/device.py",
+                          "brian2/codegen/runtime/numpy_rt/numpy_rt.py"
                         ]
                       }
                     ]
@@ -110,7 +110,7 @@
   "results with REPOGRAH": [
     {
       "name": "brian",
-      "path": "C:\\Users\\ssamu\\OneDrive\\Desktop\\github-biran2\\brian2",
+      "path": "brian2",
       "model": "gemini-2.5-flash",
       "max_input_tokens": 100000,
       "queries": [
@@ -131,8 +131,8 @@
                   "total_token_count": 1310
                 },
                 "selected_files": [
-                  "C:/Users/ssamu/OneDrive/Desktop/github-biran2/brian2/brian2/devices/device.py",
-                  "C:/Users/ssamu/OneDrive/Desktop/github-biran2/brian2/brian2/core/network.py"
+                  "brian2/devices/device.py",
+                  "brian2/core/network.py"
                 ],
                 "selected_count": 2
               },
@@ -169,8 +169,8 @@
                         "candidates": 8,
                         "selected": 2,
                         "selected_list": [
-                          "C:/Users/ssamu/OneDrive/Desktop/github-biran2/brian2/brian2/devices/device.py",
-                          "C:/Users/ssamu/OneDrive/Desktop/github-biran2/brian2/brian2/core/network.py"
+                          "brian2/devices/device.py",
+                          "brian2/core/network.py"
                         ]
                       }
                     ]
@@ -181,7 +181,7 @@
                 "files_used": 2,
                 "token_count_estimate": 19923,
                 "response": {
-                  "text": "The `run` function in the Brian2 simulator, located at `C:/Users/ssamu/OneDrive/Desktop/github-biran2/brian2/brian2/core/network.py`, is the main method for executing a simulation for a specified duration.\n\nHere's a concise explanation:\n\n*   **Purpose**: Simulates the `Network` for a given `duration`.\n*   **Parameters**:\n    *   `duration`: The simulation time to run for (e.g., `100*ms`).\n    *   `report`: How to report progress (`None`, `'text'`, `'stdout'`, `'stderr'`, or a callable function).\n    *   `report_period`: How frequently (in real time) to report progress when `report` is active.\n    *   `namespace`: An optional dictionary for resolving names in string expressions.\n    *   `profile`: A boolean to enable/disable profiling (recording execution time of `CodeObject`s).\n    *   `level`: Internal parameter for adjusting stack frame lookup for the `namespace`.\n*   **Process**:\n    1.  **Preparation**: Calls `Network.before_run` to sort objects, check dependencies, and set up the simulation environment.\n    2.  **Time Management**: Determines simulation start (`self.t`), end (`t_end`), and initializes clocks.\n    3.  **Main Loop**: Iteratively updates the network:\n        *   Identifies the clock(s) with the smallest current time.\n        *   Updates `self.t` to the time of these clocks.\n        *   If the end time is reached or `Network.stop()` is called, the loop terminates.\n        *   Iterates through `active_objects` (objects with `obj.active=True`) in the order defined by `Network.schedule` and `obj.when`/`obj.order` attributes, calling each object's `run()` method.\n        *   Advances the updated clock(s) by their `dt`.\n        *   Monitors real-time for `report` updates and checks `device._maximum_run_time` for testing purposes.\n    4.  **Post-run**: Checks for invalid states (e.g., NaNs), calls `Network.after_run`, and processes profiling information if enabled.",
+                  "text": "The `run` function in the Brian2 simulator, located at `brian2/core/network.py`, is the main method for executing a simulation for a specified duration.\n\nHere's a concise explanation:\n\n*   **Purpose**: Simulates the `Network` for a given `duration`.\n*   **Parameters**:\n    *   `duration`: The simulation time to run for (e.g., `100*ms`).\n    *   `report`: How to report progress (`None`, `'text'`, `'stdout'`, `'stderr'`, or a callable function).\n    *   `report_period`: How frequently (in real time) to report progress when `report` is active.\n    *   `namespace`: An optional dictionary for resolving names in string expressions.\n    *   `profile`: A boolean to enable/disable profiling (recording execution time of `CodeObject`s).\n    *   `level`: Internal parameter for adjusting stack frame lookup for the `namespace`.\n*   **Process**:\n    1.  **Preparation**: Calls `Network.before_run` to sort objects, check dependencies, and set up the simulation environment.\n    2.  **Time Management**: Determines simulation start (`self.t`), end (`t_end`), and initializes clocks.\n    3.  **Main Loop**: Iteratively updates the network:\n        *   Identifies the clock(s) with the smallest current time.\n        *   Updates `self.t` to the time of these clocks.\n        *   If the end time is reached or `Network.stop()` is called, the loop terminates.\n        *   Iterates through `active_objects` (objects with `obj.active=True`) in the order defined by `Network.schedule` and `obj.when`/`obj.order` attributes, calling each object's `run()` method.\n        *   Advances the updated clock(s) by their `dt`.\n        *   Monitors real-time for `report` updates and checks `device._maximum_run_time` for testing purposes.\n    4.  **Post-run**: Checks for invalid states (e.g., NaNs), calls `Network.after_run`, and processes profiling information if enabled.",
                   "usage": {
                     "prompt_token_count": 19961,
                     "candidates_token_count": 502,
