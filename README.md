@@ -112,6 +112,38 @@ Scrooge returns: `auth.py` with `login`, `authenticate`, `get_user` — not ever
 
 ---
 
+## How to Use
+
+Scrooge has two modes. Pick the one that fits your workflow.
+
+### As MCP Server (recommended)
+
+This is the hands-off mode. After a one-time setup, **you don't do anything differently** — Claude Code uses Scrooge automatically behind the scenes.
+
+1. Install Scrooge and add it to your Claude Code settings (see [Installation](#installation) and [MCP Setup](#setup-as-mcp-server-claude-code) below)
+2. Restart Claude Code
+3. Just use Claude Code as you normally would
+
+That's it. When you ask Claude something like *"explain how authentication works in this repo"*, it will **automatically** call Scrooge's `architecture` tool instead of reading dozens of files. Scrooge returns only the 2–3 most relevant files, so Claude reads less, responds faster, and costs fewer tokens.
+
+You don't need to mention Scrooge or change how you prompt — Claude sees the tools and decides when to use them.
+
+### As CLI
+
+Use this to explore a codebase from your terminal, or to integrate Scrooge into your own scripts and pipelines.
+
+```bash
+# Which files matter for "login"?
+scrooge architecture path/to/repo login
+
+# What does "login" call, and what calls it?
+scrooge connections path/to/repo login 2
+```
+
+The output is JSON — designed to be piped into other tools or fed to an LLM as context.
+
+---
+
 ## Installation
 
 ### Prerequisites
